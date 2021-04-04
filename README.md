@@ -34,6 +34,21 @@ Network Distance: 1 hop
 Service Info: OSs: Unix, Linux; CPE: cpe:/o:linux:linux_kernel
 ```
 
+<img src="https://github.com/El-Palomo/SYMFONOS3.1/blob/main/symfonos1.jpg" width=80% />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
